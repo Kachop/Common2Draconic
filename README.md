@@ -7,6 +7,8 @@ Converts plain text files to an image which contains the translated text using t
 
 ## Example:
 Here is a simple example output for words "Hello, World!"
+</br>
+<img src=/example.png alt="Example of draconic script image output for the words 'Hello, World!'"/>
 ![Example of draconic script image output for the words, "Hello, World!"](/example.png)
 
 ## How to use:
