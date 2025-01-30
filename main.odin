@@ -3,6 +3,7 @@ package main
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "core:strconv"
 import "core:unicode/utf8"
 import rl "vendor:raylib"
 
@@ -19,6 +20,8 @@ when ODIN_OS == .Windows {
 
 INPUT: string
 OUTPUT: string
+
+FONT_SIZE: i32
 
 SYMBOLS_PATH: string
 SYMBOLS: map[rune]rl.Image
@@ -38,6 +41,8 @@ init :: proc() {
 
   INPUT = fmt.tprint(CWD, "input.txt", sep=PATH_SEPERATOR)
   OUTPUT = "output.txt"
+
+  FONT_SIZE = 10
 
   SYMBOLS_PATH = fmt.tprint(#directory, "Symbols", sep="")
   
@@ -83,28 +88,31 @@ main :: proc() {
     fmt.println(CROSS, "Cannot fild file:", INPUT)
   }
 
-  width : i32 = 840
-  height : i32 = 1188
+  width : i32 = 1920
+  height : i32 = 1080
   
   canvas := rl.GenImageColor(width, height, BACKGROUND)
 
-  cursor_x: f32 = 5
-  cursor_y: f32 = 5
-  start_x := cursor_x
   line_height: f32
   max_width: f32
-  scale_factor : f32 = 5
+  scale_factor : f32 = cast(f32)FONT_SIZE / 10
+  last_char: rune
+
+  cursor_x : f32 = 5 * scale_factor
+  cursor_y : f32 = 5 * scale_factor
+  start_x := cursor_x
 
   for _, &symbol in SYMBOLS {
-    rl.ImageResize(&symbol, symbol.width / cast(i32)scale_factor, symbol.height / cast(i32)scale_factor)
+    rl.ImageResize(&symbol, cast(i32)(cast(f32)symbol.width * scale_factor), cast(i32)(cast(f32)symbol.height * scale_factor))
   }
 
   for char in strings.to_upper(to_trandlate_string) {
     switch rune(char) {
-    case ' ': cursor_x += 50 / scale_factor
-    case '\n': cursor_x = start_x; cursor_y += line_height + 20
-    case:
+    case ' ': cursor_x += 50 * scale_factor; last_char = ' '; fmt.println("Space found")
+    case '\n': cursor_x = start_x; cursor_y += line_height + (20 * scale_factor); last_char = '\n'; fmt.println("Found newline, y:", cursor_y)
+    case 'A'..='Z', '1'..='9', '!':
       symbol := SYMBOLS[rune(char)]
+      fmt.println("width:", symbol.width, "height:", symbol.height, "y:", cursor_y, "max height:", line_height)
       rl.ImageDraw(&canvas, symbol, {0, 0, cast(f32)symbol.width, cast(f32)symbol.height}, {cursor_x, cursor_y, cast(f32)symbol.width, cast(f32)symbol.height}, rl.WHITE)
       cursor_x += cast(f32)symbol.width
       if cast(f32)symbol.height > line_height {
@@ -113,8 +121,10 @@ main :: proc() {
       if cursor_x > max_width {
         max_width = cursor_x
       }
+      last_char = rune(char)
     }
     if cursor_x > cast(f32)width {
+      fmt.println("Wrapping text")
       cursor_x = start_x
       cursor_y += line_height
     }
@@ -125,7 +135,7 @@ main :: proc() {
       rl.ImageDraw(&canvas, old_canvas, {0, 0, cast(f32)width, cast(f32)height / 2}, {0, 0, cast(f32)width, cast(f32)height / 2}, rl.BLACK)
     }
   }
-
+  
   rl.ImageCrop(&canvas, {0, 0, cast(f32)max_width, cast(f32)cursor_y})
 
   if rl.ExportImage(canvas, fmt.ctprint(OUTPUT)) {
@@ -143,12 +153,14 @@ main :: proc() {
 parse_args :: proc(args: []string) #no_bounds_check {
   set_input_path: bool
   set_output_path: bool
+  set_font_size: bool
   set_symbols_path: bool
 
   args_loop: for arg, i in args {
     switch arg {
-    case "-i": set_input_path = true
-    case "-o": set_output_path = true
+    case "-i", "-input": set_input_path = true
+    case "-o", "-output": set_output_path = true
+    case "-fs", "-font_size": set_font_size = true
     case "-s": set_symbols_path = true
     case "-no_background": NO_BACKGROUND = true; fmt.printfln("%v Removing background...", TICK)
     case "-help":
@@ -166,6 +178,18 @@ parse_args :: proc(args: []string) #no_bounds_check {
     if set_output_path {
       OUTPUT = args[i+1]
       set_output_path = false
+    }
+    if set_font_size {
+      size_val, _ := strconv.parse_int(args[i+1], base=10)
+      fmt.println("Got size val", size_val)
+      if size_val > 10 {
+        FONT_SIZE = 10
+      } else if size_val <= 0 {
+        FONT_SIZE = 1
+      } else {
+        FONT_SIZE = cast(i32)size_val
+      }
+      set_font_size = false
     }
     if set_symbols_path {
       SYMBOLS_PATH = args[i+1]
