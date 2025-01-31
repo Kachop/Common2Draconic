@@ -31,6 +31,17 @@ NO_BACKGROUND: bool
 
 HELP: bool
 
+scale_factor: f32
+
+width : i32 : 1920
+height : i32 = 1080
+
+x_padding: f32
+y_padding: f32
+
+draw_width: f32
+draw_height: f32
+
 @(init)
 init :: proc() {
   rl.SetTraceLogLevel(.NONE)
@@ -49,6 +60,14 @@ init :: proc() {
   parse_args(os.args)
 
   if HELP {return}
+
+  scale_factor = cast(f32)FONT_SIZE / 10
+
+  x_padding = 20 * scale_factor
+  y_padding = 20 * scale_factor
+
+  draw_width = cast(f32)width - (x_padding * 2)
+  draw_height = cast(f32)height - (y_padding * 2)
 
   dir_handle, ok := os.open(SYMBOLS_PATH)
   defer os.close(dir_handle)
@@ -87,19 +106,17 @@ main :: proc() {
   } else {
     fmt.println(CROSS, "Cannot fild file:", INPUT)
   }
-
-  width : i32 = 1920
-  height : i32 = 1080
   
   canvas := rl.GenImageColor(width, height, BACKGROUND)
 
   line_height: f32
   max_width: f32
-  scale_factor : f32 = cast(f32)FONT_SIZE / 10
-  last_char: rune
 
-  cursor_x : f32 = 5 * scale_factor
-  cursor_y : f32 = 5 * scale_factor
+  space_width : f32 = 100 * scale_factor
+  line_padding : f32 = line_height + (20 * scale_factor)
+
+  cursor_x : f32 = x_padding
+  cursor_y : f32 = y_padding
   start_x := cursor_x
 
   for _, &symbol in SYMBOLS {
@@ -108,31 +125,30 @@ main :: proc() {
 
   for char in strings.to_upper(to_trandlate_string) {
     switch rune(char) {
-    case ' ': cursor_x += 50 * scale_factor; last_char = ' '; fmt.println("Space found")
-    case '\n': cursor_x = start_x; cursor_y += line_height + (20 * scale_factor); last_char = '\n'; fmt.println("Found newline, y:", cursor_y)
+    case ' ': if cursor_x + space_width - x_padding < draw_width {cursor_x += space_width} else {cursor_x = start_x; newline(&cursor_x, &cursor_y, start_x, line_padding)}
+    case '\n': newline(&cursor_x, &cursor_y, start_x, line_padding)
     case 'A'..='Z', '1'..='9', '!':
       symbol := SYMBOLS[rune(char)]
-      fmt.println("width:", symbol.width, "height:", symbol.height, "y:", cursor_y, "max height:", line_height)
-      rl.ImageDraw(&canvas, symbol, {0, 0, cast(f32)symbol.width, cast(f32)symbol.height}, {cursor_x, cursor_y, cast(f32)symbol.width, cast(f32)symbol.height}, rl.WHITE)
-      cursor_x += cast(f32)symbol.width
+
       if cast(f32)symbol.height > line_height {
         line_height = cast(f32)symbol.height
+        line_padding = line_height + (20 * scale_factor)
       }
-      if cursor_x > max_width {
-        max_width = cursor_x
+
+      if cursor_x + cast(f32)symbol.width - x_padding > draw_width {
+        newline(&cursor_x, &cursor_y, start_x, line_padding)
       }
-      last_char = rune(char)
+      if cursor_y + cast(f32)symbol.height - y_padding > draw_height {
+        extend_canvas(&canvas)
+      }
+      rl.ImageDraw(&canvas, symbol, {0, 0, cast(f32)symbol.width, cast(f32)symbol.height}, {cursor_x, cursor_y, cast(f32)symbol.width, cast(f32)symbol.height}, rl.WHITE)
+      cursor_x += cast(f32)symbol.width
     }
-    if cursor_x > cast(f32)width {
-      fmt.println("Wrapping text")
-      cursor_x = start_x
-      cursor_y += line_height
+    if cursor_x > max_width {
+      max_width = cursor_x
     }
-    if cursor_y > cast(f32)height {
-      height *= 2
-      old_canvas := canvas
-      canvas = rl.GenImageColor(width, height, BACKGROUND)
-      rl.ImageDraw(&canvas, old_canvas, {0, 0, cast(f32)width, cast(f32)height / 2}, {0, 0, cast(f32)width, cast(f32)height / 2}, rl.BLACK)
+    if cursor_y > draw_height {
+      extend_canvas(&canvas)
     }
   }
   
@@ -203,4 +219,17 @@ parse_args :: proc(args: []string) #no_bounds_check {
   if (len(strings.split(OUTPUT, ".")) == 1) || (strings.split(OUTPUT, ".")[1] != ".png") {
     OUTPUT = fmt.tprintf("%v.png", strings.split(OUTPUT, ".")[0])
   }
+}
+
+newline :: proc(cursor_x: ^f32, cursor_y: ^f32, x_reset: f32, y_increment: f32) {
+  cursor_x^ = x_reset
+  cursor_y^ += y_increment
+}
+
+extend_canvas :: proc(canvas: ^rl.Image) {
+  height *= 2
+  draw_height = cast(f32)height - (y_padding * 2)
+  old_canvas := canvas^
+  canvas^ = rl.GenImageColor(width, height, BACKGROUND)
+  rl.ImageDraw(canvas, old_canvas, {0, 0, cast(f32)width, cast(f32)height / 2}, {0, 0, cast(f32)width, cast(f32)height / 2}, rl.WHITE)
 }
