@@ -99,12 +99,12 @@ init :: proc() {
 main :: proc() {
   if HELP {return}
   to_translate_data, ok := os.read_entire_file(INPUT)
-  to_trandlate_string := transmute(string)to_translate_data
+  to_translate_string := transmute(string)to_translate_data
   
   if ok {
     fmt.printfln("%v Loading common text from: %v", TICK, INPUT)
   } else {
-    fmt.println(CROSS, "Cannot fild file:", INPUT)
+    fmt.println(CROSS, "Cannot find file:", INPUT)
   }
   
   canvas := rl.GenImageColor(width, height, BACKGROUND)
@@ -123,33 +123,48 @@ main :: proc() {
     rl.ImageResize(&symbol, cast(i32)(cast(f32)symbol.width * scale_factor), cast(i32)(cast(f32)symbol.height * scale_factor))
   }
 
-  for char in strings.to_upper(to_trandlate_string) {
-    switch rune(char) {
-    case ' ': if cursor_x + space_width - x_padding < draw_width {cursor_x += space_width} else {cursor_x = start_x; newline(&cursor_x, &cursor_y, start_x, line_padding)}
-    case '\n': newline(&cursor_x, &cursor_y, start_x, line_padding)
-    case 'A'..='Z', '1'..='9', '!':
-      symbol := SYMBOLS[rune(char)]
+  for word in strings.split(strings.to_upper(to_translate_string), " ") {
+    word_width : i32 = 0
+    for char in word {
+      word_width += SYMBOLS[rune(char)].width
+    }
+    if cursor_x + cast(f32)word_width - x_padding > draw_width {
+      newline(&cursor_x, &cursor_y, start_x, line_padding)
+    }
 
-      if cast(f32)symbol.height > line_height {
-        line_height = cast(f32)symbol.height
-        line_padding = line_height + (20 * scale_factor)
-      }
+    for char in word {
+      switch rune(char) {
+      case '\n': newline(&cursor_x, &cursor_y, start_x, line_padding)
+      case 'A'..='Z', '1'..='9', '!':
+        symbol := SYMBOLS[rune(char)]
 
-      if cursor_x + cast(f32)symbol.width - x_padding > draw_width {
-        newline(&cursor_x, &cursor_y, start_x, line_padding)
+        if cast(f32)symbol.height > line_height {
+          line_height = cast(f32)symbol.height
+          line_padding = line_height + (20 * scale_factor)
+        }
+
+        if cursor_x + cast(f32)symbol.width - x_padding > draw_width {
+          newline(&cursor_x, &cursor_y, start_x, line_padding)
+        }
+        if cursor_y + cast(f32)symbol.height - y_padding > draw_height {
+          extend_canvas(&canvas)
+        }
+        rl.ImageDraw(&canvas, symbol, {0, 0, cast(f32)symbol.width, cast(f32)symbol.height}, {cursor_x, cursor_y, cast(f32)symbol.width, cast(f32)symbol.height}, rl.WHITE)
+        cursor_x += cast(f32)symbol.width
       }
-      if cursor_y + cast(f32)symbol.height - y_padding > draw_height {
+      if cursor_x > max_width {
+        max_width = cursor_x
+      }
+      if cursor_y > draw_height {
         extend_canvas(&canvas)
       }
-      rl.ImageDraw(&canvas, symbol, {0, 0, cast(f32)symbol.width, cast(f32)symbol.height}, {cursor_x, cursor_y, cast(f32)symbol.width, cast(f32)symbol.height}, rl.WHITE)
-      cursor_x += cast(f32)symbol.width
     }
-    if cursor_x > max_width {
-      max_width = cursor_x
+    if cursor_x + space_width - x_padding < draw_width {
+      cursor_x += space_width
+    } else {
+      newline(&cursor_x, &cursor_y, start_x, line_padding)
     }
-    if cursor_y > draw_height {
-      extend_canvas(&canvas)
-    }
+
   }
   
   rl.ImageCrop(&canvas, {0, 0, cast(f32)max_width, cast(f32)cursor_y})
